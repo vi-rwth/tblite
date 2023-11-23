@@ -24,23 +24,38 @@
 module tblite_scf_mixer
    use mctc_env, only : wp
    use tblite_scf_mixer_broyden, only : broyden_mixer, broyden_input, new_broyden
+   use tblite_scf_mixer_diis, only: diis_mixer, diis_input, new_diis
    use tblite_scf_mixer_type, only : mixer_type
    implicit none
    private
 
-   public :: mixer_type, new_mixer
+   public :: mixer_type, new_diis_mixer, new_broyden_mixer
 
 
    !> Input for selecting electronic mixer
    type, public :: mixer_input
       !> Input for Broyden mixer
       type(broyden_input), allocatable :: broyden
+      type(diis_input), allocatable :: diis
    end type mixer_input
 
 contains
 
+subroutine new_diis_mixer(self, memory, overlap_matrix, ndim)
+   class(mixer_type), allocatable, intent(out) :: self
+   integer, intent(in) :: memory
+   integer, intent(in) :: ndim
+   real(wp), intent(in) :: overlap_matrix(ndim,ndim)
+
+   block
+      type(diis_mixer), allocatable :: mixer
+      allocate(mixer)
+      call new_diis(mixer, ndim, overlap_matrix, diis_input(memory))
+      call move_alloc(mixer, self)
+   end block
+end subroutine new_diis_mixer
 !> Create a new instance of the mixer
-subroutine new_mixer(self, memory, ndim, damp)
+subroutine new_broyden_mixer(self, memory, ndim, damp)
    !> Instance of the mixer on exit
    class(mixer_type), allocatable, intent(out) :: self
    integer, intent(in) :: memory
@@ -53,6 +68,6 @@ subroutine new_mixer(self, memory, ndim, damp)
       call new_broyden(mixer, ndim, broyden_input(memory, damp))
       call move_alloc(mixer, self)
    end block
-end subroutine new_mixer
+end subroutine new_broyden_mixer
 
 end module tblite_scf_mixer
