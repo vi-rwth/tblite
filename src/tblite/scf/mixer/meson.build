@@ -15,6 +15,7 @@
 # along with tblite.  If not, see <https://www.gnu.org/licenses/>.
 
 srcs += files(
+  'diis.f90',
   'broyden.f90',
   'type.f90',
 )
