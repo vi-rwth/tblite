@@ -44,7 +44,7 @@ contains
 !> Evaluate self-consistent iteration for the density-dependent Hamiltonian
 subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersion, &
       & interactions, ints, pot, cache, dcache, icache, &
-      & energies, error)
+      & energies, error, mixer_kind)
    !> Current iteration count
    integer, intent(inout) :: iscf
    !> Molecular structure data
@@ -65,6 +65,8 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    class(dispersion_type), intent(in), optional :: dispersion
    !> Container for general interactions
    type(container_list), intent(in), optional :: interactions
+   !> Mixer for scf
+   integer, intent(in) :: mixer_kind
 
    !> Integral container
    type(integral_type), intent(in) :: ints
@@ -105,7 +107,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    end if
    call add_pot_to_h1(bas, ints, pot, wfn%coeff)
 
-   call set_mixer(mixer, wfn, info)
+   call set_mixer(mixer, wfn, info, mixer_kind)
 
    call get_density(wfn, solver, ints, ts, error)
    if (allocated(error)) return
@@ -119,7 +121,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    call get_mulliken_atomic_multipoles(bas, ints%quadrupole, wfn%density, &
       & wfn%qpat)
 
-   call diff_mixer(mixer, wfn, info)
+   if (mixer_kind == 0) call diff_mixer(mixer, wfn, info)
 
    allocate(eao(bas%nao), source=0.0_wp)
    call get_electronic_energy(ints%hamiltonian, wfn%density, eao)
@@ -215,11 +217,12 @@ function get_mixer_dimension(mol, bas, info) result(ndim)
    end select
 end function get_mixer_dimension
 
-subroutine set_mixer(mixer, wfn, info)
+subroutine set_mixer(mixer, wfn, info, mixer_kind)
    use tblite_scf_info, only : atom_resolved, shell_resolved
    class(mixer_type), intent(inout) :: mixer
    type(wavefunction_type), intent(in) :: wfn
    type(scf_info), intent(in) :: info
+   integer, intent(in) :: mixer_kind
 
    select case(info%charge)
    case(atom_resolved)
@@ -237,6 +240,7 @@ subroutine set_mixer(mixer, wfn, info)
    case(atom_resolved)
       call mixer%set(wfn%qpat)
    end select
+   if (mixer_kind == 1) call mixer%set_1d_F(wfn%coeff)
 end subroutine set_mixer
 
 subroutine diff_mixer(mixer, wfn, info)
