@@ -78,6 +78,8 @@ module tblite_cli
       logical :: spin_polarized = .false.
       !> Algorithm for electronic solver
       integer :: solver = lapack_algorithm%gvd
+      !> Type of mixer for scf run
+      integer :: scf_acc_type
    end type run_config
 
    !> Configuration for evaluating tight binding model on input structure
@@ -450,6 +452,21 @@ subroutine get_run_arguments(config, list, start, error)
             end if
             call move_alloc(arg, config%json_output)
          end if
+      
+      case("--mixer")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         if (.not.allocated(arg)) then
+            call fatal_error(error, "Missing argument for mixer")
+            exit
+         end if
+
+         select case(arg)
+         case("diis")
+            config%scf_acc_type = 1
+         case("broyden")
+            config%scf_acc_type = 0
+         end select
       end select
    end do
 
