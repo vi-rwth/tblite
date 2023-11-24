@@ -536,7 +536,7 @@ subroutine get_singlepoint_api(vctx, vmol, vcalc, vres) &
    call check_wavefunction(res%wfn, mol%ptr, calc%ptr, calc%etemp, calc%nspin, calc%guess)
 
    call xtb_singlepoint(ctx%ptr, mol%ptr, calc%ptr, res%wfn, calc%accuracy, res%energy, &
-      & res%gradient, res%sigma, results=res%results)
+      & res%gradient, res%sigma, results=res%results, 0)
 
    call get_molecular_dipole_moment(mol%ptr, res%wfn%qat(:, 1), res%wfn%dpat(:, :, 1), &
       & res%dipole)
