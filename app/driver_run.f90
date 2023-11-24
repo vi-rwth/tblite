@@ -226,7 +226,7 @@ subroutine run_main(config, error)
    end if
 
    call xtb_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
-      & config%verbosity, results)
+      & config%verbosity, results, config%scf_acc_type)
    if (ctx%failed()) then
       call fatal(ctx, "Singlepoint calculation failed")
       do while(ctx%failed())
