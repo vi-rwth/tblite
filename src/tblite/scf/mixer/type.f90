@@ -37,6 +37,8 @@ module tblite_scf_mixer_type
       procedure :: set_2d
       !> Set new density from 3D array
       procedure :: set_3d
+      !> Set new Fock-matrix from 1D array
+      procedure :: set_1d_F
       !> Set difference between new and old density
       generic :: diff => diff_1d, diff_2d, diff_3d
       !> Set difference between new and old density from 1D array
@@ -66,6 +68,15 @@ module tblite_scf_mixer_type
          !> Density vector
          real(wp), intent(in) :: qvec(:)
       end subroutine set_1d
+
+      !> Set new Fock-matrix from 1D array
+      subroutine set_1d_F(self, f_1d)
+         import :: mixer_type, wp
+         !> Instance of the electronic mixer
+         class(mixer_type), intent(inout) :: self
+         !> Fock-matrix vector
+         real(wp), intent(in) :: f_1d(:)
+      end subroutine set_1d_F
 
       !> Set difference between new and old density from 1D array
       subroutine diff_1d(self, qvec)
