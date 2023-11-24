@@ -75,12 +75,12 @@ subroutine numdiff_grad(ctx, mol, calc, wfn, numgrad)
          moli = mol
          wfni = wfn
          moli%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         call xtb_singlepoint(ctx, moli, calc, wfni, acc, er, verbosity=0)
+         call xtb_singlepoint(ctx, moli, calc, wfni, acc, er, verbosity=0, 0)
 
          moli = mol
          wfni = wfn
          moli%xyz(ic, iat) = mol%xyz(ic, iat) - step
-         call xtb_singlepoint(ctx, moli, calc, wfni, acc, el, verbosity=0)
+         call xtb_singlepoint(ctx, moli, calc, wfni, acc, el, verbosity=0, 0)
 
          numgrad(ic, iat) = 0.5_wp*(er - el)/step
       end do
@@ -111,14 +111,14 @@ subroutine numdiff_sigma(ctx, mol, calc, wfn, numsigma)
          eps(jc, ic) = eps(jc, ic) + step
          moli%xyz(:, :) = matmul(eps, mol%xyz)
          if (any(mol%periodic)) moli%lattice(:, :) = matmul(eps, mol%lattice)
-         call xtb_singlepoint(ctx, moli, calc, wfni, acc, er, verbosity=0)
+         call xtb_singlepoint(ctx, moli, calc, wfni, acc, er, verbosity=0, 0)
 
          moli = mol
          wfni = wfn
          eps(jc, ic) = eps(jc, ic) - step
          moli%xyz(:, :) = matmul(eps, mol%xyz)
          if (any(mol%periodic)) moli%lattice(:, :) = matmul(eps, mol%lattice)
-         call xtb_singlepoint(ctx, moli, calc, wfni, acc, el, verbosity=0)
+         call xtb_singlepoint(ctx, moli, calc, wfni, acc, el, verbosity=0, 0)
 
          numsigma(jc, ic) = 0.5_wp*(er - el)/step
       end do
@@ -186,7 +186,7 @@ subroutine test_e_pse(error)
       call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
 
       energy = 0.0_wp
-      call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0)
+      call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, 0)
       call check(error, .not.ctx%failed(), &
          & message="SCF does not converge for "//trim(mol%sym(1)))
       if (allocated(error)) exit
@@ -257,7 +257,7 @@ subroutine test_e_pse_cation(error)
       call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
 
       energy = 0.0_wp
-      call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0)
+      call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, 0)
       call check(error, .not.ctx%failed(), &
          & message="SCF does not converge for "//trim(mol%sym(1)))
       if (allocated(error)) exit
@@ -329,7 +329,7 @@ subroutine test_e_pse_anion(error)
       call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
 
       energy = 0.0_wp
-      call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0)
+      call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, 0)
       call check(error, .not.ctx%failed(), &
          & message="SCF does not converge for "//trim(mol%sym(1)))
       if (allocated(error)) exit
@@ -359,7 +359,7 @@ subroutine test_e_mb01(error)
 
    call new_gfn1_calculator(calc, mol)
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, 0)
 
    call check(error, energy, ref, thr=1e-7_wp)
 
@@ -406,7 +406,7 @@ subroutine test_g_mb02(error)
 
    call new_gfn1_calculator(calc, mol)
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, 0)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, 0, 0)
 
    if (any(abs(gradient - ref) > thr2)) then
       call test_failed(error, "Gradient of energy does not match")
@@ -441,7 +441,7 @@ subroutine test_s_mb03(error)
 
    call new_gfn1_calculator(calc, mol)
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, 0)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, 0, 0)
 
    call numdiff_sigma(ctx, mol, calc, wfn, numsigma)
 
