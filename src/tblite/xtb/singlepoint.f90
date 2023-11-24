@@ -67,7 +67,7 @@ contains
 
 !> Entry point for performing single point calculation using the xTB calculator
 subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigma, &
-      & verbosity, results)
+      & verbosity, results, mixer_kind)
    !> Calculation context
    type(context_type), intent(inout) :: ctx
    !> Molecular structure data
@@ -88,6 +88,8 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    integer, intent(in), optional :: verbosity
    !> Container for storing additional results
    type(results_type), intent(out), optional :: results
+   !> Information on the Mixer to be used
+   integer, intent(in) :: mixer_kind
 
    logical :: grad, converged, econverged, pconverged
    integer :: prlevel
@@ -224,8 +226,16 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    iscf = 0
    converged = .false.
    info = calc%variable_info()
-   call new_mixer(mixer, calc%max_iter, wfn%nspin*get_mixer_dimension(mol, calc%bas, info), &
-      & calc%mixer_damping)
+
+   select case(mixer_kind)
+   case(1)
+      call new_diis_mixer(mixer, calc%max_iter, ints%overlap, &
+         & wfn%nspin*get_mixer_dimension(mol, calc%bas, info))
+   case(0)
+      call new_broyden_mixer(mixer, calc%max_iter, wfn%nspin*get_mixer_dimension(mol, calc%bas, info), &
+         & calc%mixer_damping)
+   end select
+
    if (prlevel > 0) then
       call ctx%message(repeat("-", 60))
       call ctx%message("  cycle        total energy    energy error   density error")
@@ -235,7 +245,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       elast = sum(eelec)
       call next_scf(iscf, mol, calc%bas, wfn, solver, mixer, info, &
          & calc%coulomb, calc%dispersion, calc%interactions, ints, pot, &
-         & ccache, dcache, icache, eelec, error)
+         & ccache, dcache, icache, eelec, error, mixer_kind)
       econverged = abs(sum(eelec) - elast) < econv
       pconverged = mixer%get_error() < pconv
       converged = econverged .and. pconverged
