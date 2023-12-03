@@ -26,6 +26,7 @@ list(
   "${dir}/sygst.f90"
   "${dir}/sygvd.f90"
   "${dir}/sygvr.f90"
+  "${dir}/gesv.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)
