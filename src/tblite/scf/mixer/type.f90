@@ -23,11 +23,10 @@ module tblite_scf_mixer_type
    implicit none
    private
 
-
    !> Abstract base class for electronic mixing
    type, public, abstract :: mixer_type
    contains
-      !> Apply mixing to the density
+      !> Apply mixing
       procedure(next), deferred :: next
       !> Set new density
       generic :: set => set_1d, set_2d, set_3d
@@ -37,8 +36,14 @@ module tblite_scf_mixer_type
       procedure :: set_2d
       !> Set new density from 3D array
       procedure :: set_3d
+      !> Set new Fock-matrix 
+      generic :: set_F => set_1d_F, set_2d_F, set_3d_F
       !> Set new Fock-matrix from 1D array
-      procedure :: set_1d_F
+      procedure(set_1d_F), deferred :: set_1d_F
+      !> Set new Fock-matrix from 2D array
+      procedure :: set_2d_F
+      !> Set new Fock-matrix from 3D array
+      procedure :: set_3d_F
       !> Set difference between new and old density
       generic :: diff => diff_1d, diff_2d, diff_3d
       !> Set difference between new and old density from 1D array
@@ -55,6 +60,14 @@ module tblite_scf_mixer_type
       procedure :: get_2d
       !> Get density as 3D array
       procedure :: get_3d
+      !> Get Fock-matrix
+      generic :: get_F => get_1d_F, get_2d_F, get_3d_F
+      !> Get Fock-matrix as 1D array
+      procedure(get_1d_F), deferred :: get_1d_F
+      !> Get Fock-matrix as 2D array
+      procedure :: get_2d_F
+      !> Get Fock-matrix as 3D array
+      procedure :: get_3d_F
       !> Get error metric from mixing
       procedure(get_error), deferred :: get_error
    end type mixer_type
@@ -74,7 +87,7 @@ module tblite_scf_mixer_type
          import :: mixer_type, wp
          !> Instance of the electronic mixer
          class(mixer_type), intent(inout) :: self
-         !> Fock-matrix vector
+         !> Fock-matrix
          real(wp), intent(in) :: f_1d(:)
       end subroutine set_1d_F
 
@@ -96,7 +109,16 @@ module tblite_scf_mixer_type
          real(wp), intent(out) :: qvec(:)
       end subroutine get_1d
 
-      !> Apply mixing to the density
+      !> Get Fock-matrix as 1D array
+      subroutine get_1d_F(self, coeff)
+         import :: mixer_type, wp
+         !> Instance of the electronic mixer
+         class(mixer_type), intent(inout) :: self
+         !> Fock-matrix
+         real(wp), intent(out) :: coeff(:)
+      end subroutine get_1d_F
+
+      !> Apply mixing
       subroutine next(self, error)
          import :: mixer_type, error_type
          !> Instance of the electronic mixer
@@ -138,6 +160,28 @@ subroutine set_3d(self, qvec)
    qptr(1:size(qvec)) => qvec
    call self%set(qptr)
 end subroutine set_3d
+
+!> Set new Fock matrix from 3D array
+subroutine set_3d_F(self, f_3d)
+   !> Instance of the electronic mixer
+   class(mixer_type), intent(inout) :: self
+   !> Fock-matrix
+   real(wp), contiguous, intent(in), target :: f_3d(:, :, :)
+   real(wp), pointer :: f_3d_ptr(:)
+   f_3d_ptr(1:size(f_3d)) => f_3d
+   call self%set_F(f_3d_ptr)
+end subroutine set_3d_F
+
+!> Set new Fock matrix from 2D array
+subroutine set_2d_F(self, f_2d)
+   !> Instance of the electronic mixer
+   class(mixer_type), intent(inout) :: self
+   !> Fock-matrix
+   real(wp), contiguous, intent(in), target :: f_2d(:, :)
+   real(wp), pointer :: f_2d_ptr(:)
+   f_2d_ptr(1:size(f_2d)) => f_2d
+   call self%set_F(f_2d_ptr)
+end subroutine set_2d_F
 
 !> Set difference between new and old density from 2D array
 subroutine diff_2d(self, qvec)
@@ -182,5 +226,27 @@ subroutine get_3d(self, qvec)
    qptr(1:size(qvec)) => qvec
    call self%get(qptr)
 end subroutine get_3d
+
+!> Get Fock-matrix as 2D array
+subroutine get_2d_F(self, coeff)
+   !> Instance of the electronic mixer
+   class(mixer_type), intent(inout) :: self
+   !> Fock-matrix
+   real(wp), contiguous, intent(out), target :: coeff(:, :)
+   real(wp), pointer :: f_ptr(:)
+   f_ptr(1:size(coeff)) => coeff
+   call self%get_F(f_ptr)
+end subroutine get_2d_F
+
+!> Get Fock-matrix as 3D array
+subroutine get_3d_F(self, coeff)
+   !> Instance of the electronic mixer
+   class(mixer_type), intent(inout) :: self
+   !> Fock-matrix
+   real(wp), contiguous, intent(out), target :: coeff(:, :, :)
+   real(wp), pointer :: f_ptr(:)
+   f_ptr(1:size(coeff)) => coeff
+   call self%get_F(f_ptr)
+end subroutine get_3d_F
 
 end module tblite_scf_mixer_type
