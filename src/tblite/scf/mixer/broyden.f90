@@ -64,6 +64,10 @@ module tblite_scf_mixer_broyden
       procedure :: get_1d
       !> Get error metric from mixing
       procedure :: get_error
+      !> Not used, only to satisfy the deferred statement
+      procedure :: set_1d_F
+      !> Not used, only to satisfy the deferred statement
+      procedure :: get_1d_F
    end type broyden_mixer
 
 contains
@@ -71,7 +75,7 @@ contains
 !> Create new instance of electronic mixer
 subroutine new_broyden(self, ndim, input)
    !> Instance of the mixer
-   type(broyden_mixer), intent(out) :: self
+   class(broyden_mixer), intent(out) :: self
    !> Number of variables to consider
    integer, intent(in) :: ndim
    !> Configuration of the Broyden mixer
@@ -144,6 +148,18 @@ subroutine get_1d(self, qvec)
    qvec(:) = self%q_in(self%iget+1:self%iget+size(qvec))
    self%iget = self%iget + size(qvec)
 end subroutine get_1d
+
+!> Not used, only to satisfy the deferred statement
+subroutine set_1d_F(self, f_1d)
+   class(broyden_mixer), intent(inout) :: self
+   real(wp), intent(in) :: f_1d(:)
+end subroutine set_1d_F
+
+!> Not used, only to satisfy the deferred statement
+subroutine get_1d_F(self, coeff)
+   class(broyden_mixer), intent(inout) :: self
+   real(wp), intent(out) :: coeff(:)
+end subroutine get_1d_F
 
 subroutine broyden(n, q, qlast, dq, dqlast, iter, memory, alpha, omega, df, u, a, info)
    integer, intent(in) :: n
