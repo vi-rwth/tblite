@@ -25,6 +25,7 @@ module tblite_lapack
    use tblite_lapack_getrf, only : getrf => wrap_getrf
    use tblite_lapack_getri, only : getri => wrap_getri
    use tblite_lapack_getrs, only : getrs => wrap_getrs
+   use tblite_lapack_gesv, only : gesv => wrap_gesv
    implicit none
    public
 end module tblite_lapack
