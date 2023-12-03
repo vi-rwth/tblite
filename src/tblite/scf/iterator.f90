@@ -88,10 +88,10 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
 
-   if (iscf > 0) then
+   if (iscf > 0 .and. mixer_kind == 0) then
       call mixer%next(error)
       if (allocated(error)) return
-      call get_mixer(mixer, bas, wfn, info)
+      call get_mixer(mixer, bas, wfn, info, mixer_kind)
    end if
 
    iscf = iscf + 1
@@ -107,10 +107,21 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    end if
    call add_pot_to_h1(bas, ints, pot, wfn%coeff)
 
-   call set_mixer(mixer, wfn, info, mixer_kind)
+   select case(mixer_kind)
+   case(0)
+      call set_mixer(mixer, wfn, info, mixer_kind)
+   case(1)
+      if (iscf > 1) then
+         call mixer%set_F(wfn%coeff)
+         call mixer%next(error)
+         call get_mixer(mixer, bas, wfn, info, mixer_kind)
+      end if
+   end select
 
    call get_density(wfn, solver, ints, ts, error)
    if (allocated(error)) return
+
+   if (mixer_kind == 1) call mixer%set(wfn%density)
 
    call get_mulliken_shell_charges(bas, ints%overlap, wfn%density, wfn%n0sh, &
       & wfn%qsh)
@@ -224,23 +235,28 @@ subroutine set_mixer(mixer, wfn, info, mixer_kind)
    type(scf_info), intent(in) :: info
    integer, intent(in) :: mixer_kind
 
-   select case(info%charge)
-   case(atom_resolved)
-      call mixer%set(wfn%qat)
-   case(shell_resolved)
-      call mixer%set(wfn%qsh)
-   end select
+   select case(mixer_kind)
+   case(0)
+      select case(info%charge)
+      case(atom_resolved)
+         call mixer%set(wfn%qat)
+      case(shell_resolved)
+         call mixer%set(wfn%qsh)
+      end select
 
-   select case(info%dipole)
-   case(atom_resolved)
-      call mixer%set(wfn%dpat)
-   end select
+      select case(info%dipole)
+      case(atom_resolved)
+         call mixer%set(wfn%dpat)
+      end select
 
-   select case(info%quadrupole)
-   case(atom_resolved)
-      call mixer%set(wfn%qpat)
+      select case(info%quadrupole)
+      case(atom_resolved)
+         call mixer%set(wfn%qpat)
+      end select
+   case(1)
+      call mixer%set(wfn%density)
+      call mixer%set_F(wfn%coeff)
    end select
-   if (mixer_kind == 1) call mixer%set_1d_F(wfn%coeff)
 end subroutine set_mixer
 
 subroutine diff_mixer(mixer, wfn, info)
@@ -267,29 +283,35 @@ subroutine diff_mixer(mixer, wfn, info)
    end select
 end subroutine diff_mixer
 
-subroutine get_mixer(mixer, bas, wfn, info)
+subroutine get_mixer(mixer, bas, wfn, info, mixer_kind)
    use tblite_scf_info, only : atom_resolved, shell_resolved
    class(mixer_type), intent(inout) :: mixer
    type(basis_type), intent(in) :: bas
    type(wavefunction_type), intent(inout) :: wfn
    type(scf_info), intent(in) :: info
+   integer, intent(in) :: mixer_kind
 
-   select case(info%charge)
-   case(atom_resolved)
-      call mixer%get(wfn%qat)
-   case(shell_resolved)
-      call mixer%get(wfn%qsh)
-      call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
-   end select
+   select case(mixer_kind)
+   case(0)
+      select case(info%charge)
+      case(atom_resolved)
+         call mixer%get(wfn%qat)
+      case(shell_resolved)
+         call mixer%get(wfn%qsh)
+         call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
+      end select
 
-   select case(info%dipole)
-   case(atom_resolved)
-      call mixer%get(wfn%dpat)
-   end select
+      select case(info%dipole)
+      case(atom_resolved)
+         call mixer%get(wfn%dpat)
+      end select
 
-   select case(info%quadrupole)
-   case(atom_resolved)
-      call mixer%get(wfn%qpat)
+      select case(info%quadrupole)
+      case(atom_resolved)
+         call mixer%get(wfn%qpat)
+      end select
+   case(1)
+      call mixer%get_F(wfn%coeff)
    end select
 end subroutine get_mixer
 
