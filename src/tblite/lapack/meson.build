@@ -23,4 +23,5 @@ srcs += files(
   'sygst.f90',
   'sygvd.f90',
   'sygvr.f90',
+  'gesv.f90',
 )
