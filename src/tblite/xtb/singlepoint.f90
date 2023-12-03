@@ -33,8 +33,8 @@ module tblite_xtb_singlepoint
    use tblite_lapack_sygvr, only : sygvr_solver
    use tblite_output_format, only : format_string
    use tblite_results, only : results_type
-   use tblite_scf, only : mixer_type, new_mixer, scf_info, next_scf, &
-      & get_mixer_dimension, potential_type, new_potential
+   use tblite_scf, only : mixer_type, new_diis_mixer, new_broyden_mixer, &
+      & scf_info, next_scf, get_mixer_dimension, potential_type, new_potential
    use tblite_scf_solver, only : solver_type
    use tblite_timer, only : timer_type, format_time
    use tblite_wavefunction, only : wavefunction_type, get_density_matrix, &
@@ -229,8 +229,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
 
    select case(mixer_kind)
    case(1)
-      call new_diis_mixer(mixer, calc%max_iter, ints%overlap, &
-         & wfn%nspin*get_mixer_dimension(mol, calc%bas, info))
+      call new_diis_mixer(mixer, size(ints%overlap, 1), ints%overlap, calc%max_iter)
    case(0)
       call new_broyden_mixer(mixer, calc%max_iter, wfn%nspin*get_mixer_dimension(mol, calc%bas, info), &
          & calc%mixer_damping)
