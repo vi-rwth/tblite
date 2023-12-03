@@ -20,6 +20,7 @@ list(
   APPEND srcs
   "${dir}/broyden.f90"
   "${dir}/type.f90"
+  "${dir}/diis.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)
