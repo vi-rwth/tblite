@@ -39,7 +39,7 @@ module tblite_scf_mixer_diis
       procedure :: get_1d
       !> Get error metric from mixing
       procedure :: get_error
-      !> Not used, only to satisfy the deferred statement
+      !> Get error for first run
       procedure :: diff_1d
    end type diis_mixer
 
