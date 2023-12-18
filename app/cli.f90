@@ -462,7 +462,9 @@ subroutine get_run_arguments(config, list, start, error)
          end if
 
          select case(arg)
-         case("diis")
+         case("diis_d")
+            config%scf_acc_type = 2
+         case("diis_f")
             config%scf_acc_type = 1
          case("broyden")
             config%scf_acc_type = 0
