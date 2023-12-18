@@ -68,6 +68,8 @@ module tblite_scf_mixer_broyden
       procedure :: set_1d_F
       !> Not used, only to satisfy the deferred statement
       procedure :: get_1d_F
+      !> Not used, only to satisfy the deferred statement
+      procedure :: set_1d_D
    end type broyden_mixer
 
 contains
@@ -160,6 +162,12 @@ subroutine get_1d_F(self, coeff)
    class(broyden_mixer), intent(inout) :: self
    real(wp), intent(out) :: coeff(:)
 end subroutine get_1d_F
+
+!> Not used, only to satisfy the deferred statement
+subroutine set_1d_D(self, d_1d)
+   class(broyden_mixer), intent(inout) :: self
+   real(wp), intent(in) :: d_1d(:)
+end subroutine set_1d_D
 
 subroutine broyden(n, q, qlast, dq, dqlast, iter, memory, alpha, omega, df, u, a, info)
    integer, intent(in) :: n
