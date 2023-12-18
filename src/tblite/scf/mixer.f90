@@ -41,15 +41,15 @@ module tblite_scf_mixer
 
 contains
 
-subroutine new_diis_mixer(self, overlap_matrix, memory)
+subroutine new_diis_mixer(self, overlap_matrix, memory, mode)
    class(mixer_type), allocatable, intent(out) :: self
-   integer, intent(in) :: memory
+   integer, intent(in) :: memory, mode
    real(wp), intent(in) :: overlap_matrix(:,:)
 
    block
       type(diis_mixer), allocatable :: mixer
       allocate(mixer)
-      call new_diis(mixer, overlap_matrix, diis_input(memory))
+      call new_diis(mixer, overlap_matrix, diis_input(memory, mode))
       call move_alloc(mixer, self)
    end block
 end subroutine new_diis_mixer
