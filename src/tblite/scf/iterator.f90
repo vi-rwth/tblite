@@ -88,12 +88,24 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
 
-   if (iscf > 0 .and. mixer_kind == 0) then
-      call mixer%next(error)
-      if (allocated(error)) return
-      call get_mixer(mixer, bas, wfn, info, mixer_kind)
-   end if
-
+   select case(mixer_kind)
+   case(0)
+      if (iscf > 0) then
+         call mixer%next(error)
+         if (allocated(error)) return
+         call get_mixer(mixer, bas, wfn, info, mixer_kind)
+      end if
+   case(2)
+      if (iscf > 1) then
+         call set_mixer(mixer, wfn, info)
+         call mixer%next(error)
+         if (allocated(error)) return
+         call get_mixer(mixer, bas, wfn, info, mixer_kind)
+      end if
+   end select
+   print *
+   print *, wfn%qat
+   print *
    iscf = iscf + 1
    call pot%reset
    if (present(coulomb)) then
@@ -109,19 +121,28 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
 
    select case(mixer_kind)
    case(0)
-      call set_mixer(mixer, wfn, info, mixer_kind)
+      call set_mixer(mixer, wfn, info)
    case(1)
       if (iscf > 1) then
+         call mixer%set_D(wfn%density)
          call mixer%set_F(wfn%coeff)
          call mixer%next(error)
+         if (allocated(error)) return
          call get_mixer(mixer, bas, wfn, info, mixer_kind)
+      else
+         call set_mixer(mixer, wfn, info)
+      end if
+   case(2)
+      if (iscf > 1) then
+         call mixer%set_D(wfn%density)
+         call mixer%set_F(wfn%coeff)
+      else
+         call set_mixer(mixer, wfn, info)
       end if
    end select
 
    call get_density(wfn, solver, ints, ts, error)
    if (allocated(error)) return
-
-   if (mixer_kind == 1) call mixer%set(wfn%density)
 
    call get_mulliken_shell_charges(bas, ints%overlap, wfn%density, wfn%n0sh, &
       & wfn%qsh)
@@ -132,8 +153,13 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    call get_mulliken_atomic_multipoles(bas, ints%quadrupole, wfn%density, &
       & wfn%qpat)
 
-   if (mixer_kind == 0) call diff_mixer(mixer, wfn, info)
-
+   select case(mixer_kind)
+   case(0)
+      call diff_mixer(mixer, wfn, info)
+   case(1,2)
+      if (iscf == 1) call diff_mixer(mixer, wfn, info)
+   end select
+   
    allocate(eao(bas%nao), source=0.0_wp)
    call get_electronic_energy(ints%hamiltonian, wfn%density, eao)
 
@@ -228,35 +254,29 @@ function get_mixer_dimension(mol, bas, info) result(ndim)
    end select
 end function get_mixer_dimension
 
-subroutine set_mixer(mixer, wfn, info, mixer_kind)
+subroutine set_mixer(mixer, wfn, info)
    use tblite_scf_info, only : atom_resolved, shell_resolved
    class(mixer_type), intent(inout) :: mixer
    type(wavefunction_type), intent(in) :: wfn
    type(scf_info), intent(in) :: info
-   integer, intent(in) :: mixer_kind
 
-   select case(mixer_kind)
-   case(0)
-      select case(info%charge)
-      case(atom_resolved)
-         call mixer%set(wfn%qat)
-      case(shell_resolved)
-         call mixer%set(wfn%qsh)
-      end select
-
-      select case(info%dipole)
-      case(atom_resolved)
-         call mixer%set(wfn%dpat)
-      end select
-
-      select case(info%quadrupole)
-      case(atom_resolved)
-         call mixer%set(wfn%qpat)
-      end select
-   case(1)
-      call mixer%set(wfn%density)
-      call mixer%set_F(wfn%coeff)
+   select case(info%charge)
+   case(atom_resolved)
+      call mixer%set(wfn%qat)
+   case(shell_resolved)
+      call mixer%set(wfn%qsh)
    end select
+
+   select case(info%dipole)
+   case(atom_resolved)
+      call mixer%set(wfn%dpat)
+   end select
+
+   select case(info%quadrupole)
+   case(atom_resolved)
+      call mixer%set(wfn%qpat)
+   end select
+
 end subroutine set_mixer
 
 subroutine diff_mixer(mixer, wfn, info)
@@ -292,7 +312,7 @@ subroutine get_mixer(mixer, bas, wfn, info, mixer_kind)
    integer, intent(in) :: mixer_kind
 
    select case(mixer_kind)
-   case(0)
+   case(0,2)
       select case(info%charge)
       case(atom_resolved)
          call mixer%get(wfn%qat)
