@@ -103,9 +103,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
          call get_mixer(mixer, bas, wfn, info, mixer_kind)
       end if
    end select
-   print *
-   print *, wfn%qat
-   print *
+
    iscf = iscf + 1
    call pot%reset
    if (present(coulomb)) then
