@@ -10,32 +10,37 @@ module tblite_scf_mixer_diis
    type, public :: diis_input
       !> Number of steps to keep in memory
       integer :: memory
+      integer :: mode
    end type diis_input
 
    type, public, extends(mixer_type) :: diis_mixer
       integer :: ndim
       integer :: memory
+      integer :: mode
       integer :: iter
       real(wp) :: e_max
       real(wp), allocatable :: err_v(:)
       real(wp), allocatable :: F(:)
       real(wp), allocatable :: D(:)
+      real(wp), allocatable :: q(:)
       real(wp), allocatable :: S(:,:)
    contains
       !> Apply mixing
       procedure :: next
       !> Set Fock-matrix from 1D array
       procedure :: set_1d_F
-      !> Set density-Matrix from 1D array
+      !> Set density matrix from 1D array
+      procedure :: set_1d_D
+      !> Set density from 1D array (only for diis_d)
       procedure :: set_1d
-      !> Get Fock-Matrix as 1D array
+      !> Get Fock-Matrix as 1D array (only for diis_f)
       procedure :: get_1d_F
+      !> Get density from 1D array (only for diis_d)
+      procedure :: get_1d
       !> Get error metric from mixing
       procedure :: get_error
       !> Not used, only to satisfy the deferred statement
       procedure :: diff_1d
-      !> Not used, only to satisfy the deferred statement
-      procedure :: get_1d      
    end type diis_mixer
 
    contains
@@ -49,8 +54,9 @@ module tblite_scf_mixer_diis
       ndim = size(S, 1)
       self%ndim = ndim
       self%iter = 0
-      self%memory = input%memory
       self%e_max = 0
+      self%memory = input%memory
+      self%mode = input%mode
       allocate(self%S(ndim,ndim))
       self%S = S
       allocate(self%err_v(ndim*(ndim+1)/2))
@@ -61,13 +67,13 @@ module tblite_scf_mixer_diis
    !> Routines for accessing D and F
 
    !> Set new density-matrix from 1D array
-   subroutine set_1d(self, qvec)
+   subroutine set_1d_D(self, d_1d)
       !> Instance of the mixer
       class(diis_mixer), intent(inout) :: self
       !> Density vector
-      real(wp), intent(in) :: qvec(:)
-      self%D = qvec
-   end subroutine set_1d
+      real(wp), intent(in) :: d_1d(:)
+      self%D = d_1d
+   end subroutine set_1d_D
 
    !> Set new Fock-matrix from 1D array
    subroutine set_1d_F(self, f_1d)
@@ -83,8 +89,30 @@ module tblite_scf_mixer_diis
             self%F(indx) = f_1d(j+self%ndim*(i-1))
          end do
       end do
+      if (self%mode == 2) call get_emax(self)
    end subroutine set_1d_F
-   
+
+   !> Set new density from 1D array (only for diis_d)
+   subroutine set_1d(self, qvec)
+      !> Instance of the mixer
+      class(diis_mixer), intent(inout) :: self
+      real(wp), allocatable :: lastq(:)
+      !> Density vector
+      real(wp), intent(in) :: qvec(:)
+      if (.not. allocated(self%q)) then
+         allocate(self%q(size(qvec)))
+         self%q = qvec
+      else
+         allocate(lastq(size(self%q)))
+         lastq = self%q
+         deallocate(self%q)
+         allocate(self%q(size(lastq)+size(qvec)))
+         self%q(1:size(lastq)) = lastq
+         deallocate(lastq)
+         self%q(size(lastq)+1:size(lastq)+size(qvec)) = qvec
+      end if
+   end subroutine set_1d
+
    !> Apply mixing 
    subroutine next(self, error)
       class(diis_mixer), intent(inout) :: self
@@ -92,12 +120,17 @@ module tblite_scf_mixer_diis
       integer :: info
 
       self%iter = self%iter + 1
-      call get_emax(self)
-      call diis(self%ndim, self%iter, self%F, self%e_max, self%err_v, self%memory, info)
+      select case(self%mode)
+      case(1)
+         call get_emax(self)
+         call diis(self%iter, self%F, self%e_max, self%err_v, self%memory, info)
+      case(2)
+         call diis(self%iter, self%q, self%e_max, self%err_v, self%memory, info)
+      end select
       if (info /= 0) call fatal_error(error, "DIIS failed to obtain next iteration")
    end subroutine next
 
-   !> Get Fock-matrix as 1D array
+   !> Get Fock-matrix as 1D array (for diis_f)
    subroutine get_1d_F(self, coeff)
       class(diis_mixer), intent(inout) :: self
       real(wp), intent(out) :: coeff(:)
@@ -111,18 +144,57 @@ module tblite_scf_mixer_diis
          end do
       end do
    end subroutine get_1d_F
-
-   !> Not used, only to satisfy the deferred statement
-   subroutine diff_1d(self, qvec)
-      class(diis_mixer), intent(inout) :: self
-      real(wp), intent(in) :: qvec(:)
-   end subroutine diff_1d
    
-   !> Not used, only to satisfy the deferred statement
+   !> Get density as 1D array (for diis_d)
    subroutine get_1d(self, qvec)
       class(diis_mixer), intent(inout) :: self
       real(wp), intent(out) :: qvec(:)
+      real(wp), allocatable :: truncq(:)
+      if (size(qvec) < size(self%q)) then
+         allocate(truncq(size(self%q)-size(qvec)))
+         truncq = self%q(size(qvec)+1:size(self%q))
+         qvec = self%q(1:size(qvec))
+         deallocate(self%q)
+         allocate(self%q(size(truncq)))
+         self%q = truncq
+         deallocate(truncq)
+      else
+         qvec = self%q
+         deallocate(self%q)
+      end if
    end subroutine get_1d
+
+   !> Get error for first run
+   subroutine diff_1d(self, qvec)
+      class(diis_mixer), intent(inout) :: self
+      real(wp), intent(in) :: qvec(:)
+      real(wp), allocatable :: lastq(:)
+      real(wp), allocatable, save :: old_q(:)
+      if (.not. allocated(old_q)) then
+         allocate(old_q(size(self%q)))
+         old_q = self%q
+         deallocate(self%q)
+         allocate(self%q(size(qvec)))
+         self%q = qvec
+      else 
+         allocate(lastq(size(self%q)))
+         lastq = self%q
+         deallocate(self%q)
+         allocate(self%q(size(lastq)+size(qvec)))
+         self%q(1:size(lastq)) = lastq
+         deallocate(lastq)
+         self%q(size(lastq)+1:size(lastq)+size(qvec)) = qvec
+         if (size(self%q) == size(old_q)) then
+            self%e_max = 0.0_wp
+            do i = 1, size(self%q)
+               self%e_max = self%e_max + (self%q(i) - old_q(i))**2 / size(self%q)
+            end do
+            self%e_max = sqrt(self%e_max)
+            deallocate(self%q)
+            deallocate(old_q)
+         end if   
+      end if
+   end subroutine diff_1d
 
    !> Get error for output
    pure function get_error(self) result(error)
@@ -166,12 +238,12 @@ module tblite_scf_mixer_diis
    end subroutine get_emax
 
    !> General linear algebra
-   subroutine hadamard(vect1,vect2,n)
-      integer, intent(in) :: n
-      real(wp), intent(in) :: vect1(n)
-      real(wp) :: prod_vect(n,1)
-      real(wp), intent(inout) :: vect2(n,1)
-      do i=1,n
+   subroutine hadamard(vect1,vect2)
+      real(wp), intent(in) :: vect1(:)
+      real(wp), allocatable :: prod_vect(:,:)
+      real(wp), intent(inout) :: vect2(:,:)
+      allocate(prod_vect(size(vect1),1))
+      do i=1,size(vect1)
          prod_vect(i,1) = vect1(i) * vect2(i,1)
       end do
       vect2 = prod_vect
@@ -222,34 +294,25 @@ module tblite_scf_mixer_diis
    end subroutine build_scale_matrix
    
    !> Specific to DIIS 
-   subroutine build_F(B, n, it, omit, saved_F, sol, F, info)
-      integer, intent(in) :: n, it, omit
+   subroutine build_mat(B, it, omit, saved_mat, sol, mat, info)
+      integer, intent(in) :: it, omit
       integer, intent(out) :: info
       integer :: perm(it-omit)
-      real(wp), intent(inout) :: B(it-omit,it-omit), sol(it-omit,1)
-      real(wp), intent(in) :: saved_F(:)
-      real(wp), intent(out) :: F(:)
+      real(wp), intent(inout) :: B(:,:), sol(:,:)
+      real(wp), intent(in) :: saved_mat(:)
+      real(wp), intent(out) :: mat(:)
 
       call call_lapack_gesv(B, sol, info, perm)
       if (info==0) then
-         F = 0.0_wp
+         mat = 0.0_wp
          do i=1,it-omit-1
-            F = F + sol(i,1)*saved_F((i+omit-1)*n*(n+1)/2+1:(i+omit)*n*(n+1)/2)
+            mat = mat + sol(i,1)*saved_mat((i-1)*size(mat)+1:i*size(mat))
          end do
       end if
-   end subroutine build_F
+   end subroutine build_mat
 
-   subroutine call_lapack_gesv(a, b, info, ipiv)
-      real(wp), intent(inout) :: a(:,:)
-      real(wp), intent(inout) :: b(:,:)
-      integer, intent(out) :: info
-      integer, intent(out) :: ipiv(:)
-      
-      call gesv(a, b, info, ipiv)
-   end subroutine call_lapack_gesv
-
-   subroutine build_B(err_v, sv_err, n, it, omit, old_B, B)
-      integer, intent(in) :: n, it, omit
+   subroutine build_B(err_v, sv_err, it, omit, old_B, B)
+      integer, intent(in) :: it, omit
       real(wp), intent(in) :: sv_err(:), err_v(:), old_B(:, :)
       real(wp), intent(out) :: B(:, :)
       real(wp) :: Tr
@@ -258,7 +321,7 @@ module tblite_scf_mixer_diis
       if (it /= 1) then
          B(1:it-omit-1, 1:it-omit-1) = old_B
          do i=1,it-omit-1
-            call frobenius(sv_err((i+omit-1)*n*(n+1)/2+1:(i+omit)*n*(n+1)/2), err_v, Tr)
+            call frobenius(sv_err((i-1)*size(err_v)+1:i*size(err_v)), err_v, Tr)
             B(it-omit, i) = Tr
             B(i, it-omit) = Tr
          end do
@@ -267,17 +330,16 @@ module tblite_scf_mixer_diis
       B(it-omit, it-omit) = Tr
    end subroutine build_B
 
-   subroutine save_vectors(F, err_v, n, it, old_sv_F, old_sv_err, sv_F, sv_err)
-      integer, intent(in) :: n, it
-      real(wp), intent(in) :: F(:), err_v(:)
-      real(wp), intent(in) :: old_sv_F(:), old_sv_err(:)
-      real(wp), intent(out) :: sv_F(it*n*(n+1)/2), sv_err(it*n*(n+1)/2)
+   subroutine save_vectors(mat, err_v, it, last_sv_mat, last_sv_err, sv_mat, sv_err, omit)
+      integer, intent(in) :: it, omit
+      real(wp), intent(in) :: mat(:), err_v(:), last_sv_mat(:), last_sv_err(:)
+      real(wp), intent(out) :: sv_mat(:), sv_err(:)
       if (it/=1) then
-         sv_err(1:(it-1)*n*(n+1)/2) = old_sv_err
-         sv_F(1:(it-1)*n*(n+1)/2) = old_sv_F
+         sv_err(1:(it-omit-1)*size(err_v)) = last_sv_err
+         sv_mat(1:(it-omit-1)*size(mat)) = last_sv_mat
       end if        
-      sv_err((it-1)*n*(n+1)/2+1:it*n*(n+1)/2) = err_v
-      sv_F((it-1)*n*(n+1)/2+1:it*n*(n+1)/2) = F
+      sv_err((it-omit-1)*size(err_v)+1:(it-omit)*size(err_v)) = err_v
+      sv_mat((it-omit-1)*size(mat)+1:(it-omit)*size(mat)) = mat
    end subroutine save_vectors
 
    subroutine rescale_B(k,it,omit, B, B_scaled, sol)
@@ -286,7 +348,7 @@ module tblite_scf_mixer_diis
       real(wp), intent(in) :: B(:,:)
       real(wp) :: scale_matr(it-omit)
       real(wp) :: tmp_matr(it-omit,it-omit), norm1, norm2
-      real(wp), intent(out) :: sol(it-omit,1), B_scaled(it-omit,it-omit), k
+      real(wp), intent(out) :: sol(:,:), B_scaled(:,:), k
 
       call build_scale_matrix(B,scale_matr)
       do i=1,it-omit
@@ -294,9 +356,9 @@ module tblite_scf_mixer_diis
             tmp_matr(j,i) = scale_matr(j)*B(j,i)
          end do
       end do
-      sol = 0d0
-      sol(it-omit,1) = 1d0
-      call hadamard(scale_matr, sol, it-omit)
+      sol = 0.0_wp
+      sol(it-omit,1) = 1.0_wp
+      call hadamard(scale_matr, sol)
       B_scaled = tmp_matr
       call call_lapack_getrx(tmp_matr, perm, info)
       call norm_i(B_scaled, norm1)      
@@ -314,21 +376,30 @@ module tblite_scf_mixer_diis
       call getri(a, ipiv, info)
    end subroutine call_lapack_getrx
 
-   subroutine diis(n, it, F, e_max, error_v, memory, info)
+   subroutine call_lapack_gesv(a, b, info, ipiv)
+      real(wp), intent(inout) :: a(:,:)
+      real(wp), intent(inout) :: b(:,:)
+      integer, intent(out) :: info
+      integer, intent(out) :: ipiv(:)
+      
+      call gesv(a, b, info, ipiv)
+   end subroutine call_lapack_gesv
+
+   subroutine diis(it, mat, e_max, err_v, memory, info)
       !parameters
       integer :: max_k = 100000, min_dim = 5
-      real(wp) :: diis_thresh = 1.0d0
+      real(wp) :: diis_thresh = 1.0_wp
       logical :: start_diis
 
-      integer, intent(in) :: n, it, memory
+      integer, intent(in) :: it, memory
       integer, intent(out) :: info
-      real(wp), intent(inout) :: F(:)
-      real(wp), intent(in) :: error_v(:), e_max
+      real(wp), intent(inout) :: mat(:)
+      real(wp), intent(in) :: err_v(:), e_max
       real(wp) :: k, e_3
-      real(wp), allocatable :: old_sv_err(:), old_sv_F(:), B_scaled(:,:), old_B(:,:), sol(:,:)
-      real(wp), allocatable, save :: B(:,:), saved_err(:), saved_F(:)
+      real(wp), allocatable :: last_sv_err(:), last_sv_mat(:), B_scaled(:,:), old_B(:,:), sol(:,:)
+      real(wp), allocatable, save :: B(:,:), saved_err(:), saved_mat(:)
       real(wp), save :: save_emax(3)
-      integer, save :: mov, var
+      integer, save :: mov, var, last_mov
       
       !Getting e_3 and checking if in range to start
       if (e_max<diis_thresh) then
@@ -339,9 +410,12 @@ module tblite_scf_mixer_diis
       end if
       if (it == 1) then
          mov = 0
+         last_mov = 0
          var = 1
       end if
-      if (var == 1) then
+
+      select case(var)
+      case(1)
          save_emax(1) = e_max
          var = 2
          if (it>2) then
@@ -349,7 +423,7 @@ module tblite_scf_mixer_diis
          else
             e_3 = 1
          end if
-      else if (var == 2) then
+      case(2)
          save_emax(2) = e_max
          var = 3
          if (it>2) then
@@ -357,43 +431,43 @@ module tblite_scf_mixer_diis
          else
             e_3 = 1
          end if
-      else
+      case(3)
          save_emax(3) = e_max
          var = 1
          e_3 = (save_emax(1)-save_emax(2))+(save_emax(2)-save_emax(3))
-      end if
+      end select
 
       !Preparing for B construction
-      allocate(old_sv_err((it-1)*n*(n+1)/2))
-      allocate(old_sv_F((it-1)*n*(n+1)/2))
+      allocate(last_sv_mat((it-1-mov)*size(mat)))
+      allocate(last_sv_err((it-1-mov)*size(err_v)))
       allocate(old_B(it-1-mov,it-1-mov))
       if (it/=1) then
-         old_sv_err = saved_err
-         old_sv_F = saved_F
+         last_sv_err = saved_err(1+(mov-last_mov)*size(err_v):(it-1-last_mov)*size(err_v))
+         last_sv_mat = saved_mat(1+(mov-last_mov)*size(mat):(it-1-last_mov)*size(mat))
          old_B = B(1:it-mov-1,1:it-mov-1)
          deallocate(saved_err)
-         deallocate(saved_F)
+         deallocate(saved_mat)
          deallocate(B)
       end if
       allocate(B(it-mov+1, it-mov+1))
-      allocate(saved_err(it*n*(n+1)/2))
-      allocate(saved_F(it*n*(n+1)/2))
+      allocate(saved_err((it-mov)*size(err_v)))
+      allocate(saved_mat((it-mov)*size(mat)))
       allocate(sol(it-mov+1,1))
       allocate(B_scaled(it-mov+1, it-mov+1))
-      call save_vectors(F, error_v, n, it, old_sv_F, old_sv_err, saved_F, saved_err)
-      deallocate(old_sv_err)
-      deallocate(old_sv_F)
+      call save_vectors(mat, err_v, it, last_sv_mat, last_sv_err, saved_mat, saved_err, mov)
+      deallocate(last_sv_err)
+      deallocate(last_sv_mat)
 
       !Constructing B (and reducing k via rescaling + omitting older itations)
-      call build_B(error_v, saved_err, n, it, mov, old_B, B)
+      call build_B(err_v, saved_err, it, mov, old_B, B)
       call rescale_B(k,it+1,mov, B, B_scaled, sol)
-      if (e_3 <= 0 .OR. size(B, dim=1) >= memory) then
+      last_mov = mov
+      if (e_3 <= 0 .or. size(B, 1) >= memory) then
          do
             if (e_3 <= 0) then
-               if (it-mov <=min_dim) exit
-               if (k < max_k) exit
+               if (it-mov <=min_dim .or. k < max_k) exit
             else
-               if (size(B, dim=1) <= memory) exit
+               if (size(B, 1) <= memory) exit
             end if
             if (allocated(old_B) .eqv. .TRUE.) deallocate(old_B)
             allocate(old_B(it-mov,it-mov))
@@ -413,10 +487,11 @@ module tblite_scf_mixer_diis
          deallocate(old_B)
       end if
       
-      !Constructing F if below threshold
-      if (start_diis .eqv. .TRUE.) call build_F(B_scaled,n,it+1,mov,saved_F,sol, F, info)
+      !Constructing mat if below threshold
+      if (start_diis .eqv. .TRUE.) call build_mat(B_scaled,it+1,mov,saved_mat,sol, mat, info)
       deallocate(sol)
       deallocate(B_scaled)
-      !Use for next round: saved_D, saved_err, B, mov, var, save_emax
+
+      !Use for next round: saved_mat, saved_err, B, mov, var, save_emax
    end subroutine diis
 end module tblite_scf_mixer_diis
