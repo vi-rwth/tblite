@@ -228,8 +228,9 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    info = calc%variable_info()
 
    select case(mixer_kind)
-   case(1)
-      call new_diis_mixer(mixer, ints%overlap, wfn%nspin*get_mixer_dimension(mol, calc%bas, info))
+   case(1,2)
+      call new_diis_mixer(mixer, ints%overlap, wfn%nspin*get_mixer_dimension(mol, calc%bas, info), &
+         & mixer_kind)
    case(0)
       call new_broyden_mixer(mixer, calc%max_iter, wfn%nspin*get_mixer_dimension(mol, calc%bas, info), &
          & calc%mixer_damping)
