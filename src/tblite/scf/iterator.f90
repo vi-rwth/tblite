@@ -88,6 +88,9 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
 
+   !if (iscf .eq. 0)
+   !new_mixer(mixer, calc)
+
    select case(mixer_kind)
    case(0)
       if (iscf > 0) then
@@ -151,13 +154,8 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    call get_mulliken_atomic_multipoles(bas, ints%quadrupole, wfn%density, &
       & wfn%qpat)
 
-   select case(mixer_kind)
-   case(0)
-      call diff_mixer(mixer, wfn, info)
-   case(1,2)
-      if (iscf == 1) call diff_mixer(mixer, wfn, info)
-   end select
-   
+   call diff_mixer(mixer, wfn, info)
+    
    allocate(eao(bas%nao), source=0.0_wp)
    call get_electronic_energy(ints%hamiltonian, wfn%density, eao)
 
@@ -250,6 +248,17 @@ function get_mixer_dimension(mol, bas, info) result(ndim)
    case(atom_resolved)
       ndim = ndim + 6*mol%nat
    end select
+
+   select case(info%density)
+   case(orbital_resolved)
+      ndim = bas%nao * bas%nao
+   end select
+
+   select case(info%fockian)
+   case(orbital_resolved)
+      ndim = bas%nao * bas%nao
+   end select
+
 end function get_mixer_dimension
 
 subroutine set_mixer(mixer, wfn, info)
@@ -275,6 +284,13 @@ subroutine set_mixer(mixer, wfn, info)
       call mixer%set(wfn%qpat)
    end select
 
+   select case(info%density)
+   case 
+      call mixer%set(wfn%density)
+   end select
+
+
+
 end subroutine set_mixer
 
 subroutine diff_mixer(mixer, wfn, info)
@@ -299,6 +315,9 @@ subroutine diff_mixer(mixer, wfn, info)
    case(atom_resolved)
       call mixer%diff(wfn%qpat)
    end select
+
+   select case(info%)
+
 end subroutine diff_mixer
 
 subroutine get_mixer(mixer, bas, wfn, info, mixer_kind)

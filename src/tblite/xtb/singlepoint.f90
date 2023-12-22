@@ -227,6 +227,8 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    converged = .false.
    info = calc%variable_info()
 
+   call new_mixer(mixer, calc, ints, wfn%nspin*get_mixer_dimension(mol, calc%bas, info))
+   
    select case(mixer_kind)
    case(1,2)
       call new_diis_mixer(mixer, ints%overlap, wfn%nspin*get_mixer_dimension(mol, calc%bas, info), &

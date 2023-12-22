@@ -42,6 +42,7 @@ module tblite_xtb_calculator
    use tblite_xtb_coulomb, only : tb_coulomb
    use tblite_xtb_h0, only : tb_hamiltonian, new_hamiltonian
    use tblite_xtb_spec, only : tb_h0spec
+   use tblite_scf_mixer, only : mixer_alogorithm
    implicit none
    private
 
@@ -78,6 +79,8 @@ module tblite_xtb_calculator
       logical :: save_integrals = .false.
       !> List of additional interaction containers
       type(container_list), allocatable :: interactions
+      !> Mixer Type
+      integer :: mixer_type = mixer_alogorithm%broyden
    contains
       !> Get information about density dependent quantities used in the energy
       procedure :: variable_info
@@ -643,7 +646,7 @@ end subroutine pop
 
 
 pure function variable_info(self) result(info)
-   use tblite_scf_info, only : scf_info, max
+   use tblite_scf_info, only : scf_info, max, orbital_resolved
    !> Instance of the electrostatic container
    class(xtb_calculator), intent(in) :: self
    !> Information on the required potential data
@@ -661,6 +664,14 @@ pure function variable_info(self) result(info)
 
    if (allocated(self%interactions)) then
       info = max(info, self%interactions%variable_info())
+   end if
+
+   if (self%mixer_type .eq. mixer_alogorithm%diis_d) then
+      info = scf_info(density=orbital_resolved)
+   end if
+   
+   if (self%mixer_type .eq. mixer_alogorithm%diis_f) then
+      info = scf_info(fockian=orbital_resolved)
    end if
 
 end function variable_info

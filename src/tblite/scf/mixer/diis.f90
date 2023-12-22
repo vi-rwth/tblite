@@ -7,6 +7,9 @@ module tblite_scf_mixer_diis
 
    public :: new_diis
 
+   integer, parameter :: max_k = 100000, min_dim = 5
+   real(wp), parameter :: diis_thresh = 1.0_wp
+
    type, public :: diis_input
       !> Number of steps to keep in memory
       integer :: memory
@@ -18,6 +21,7 @@ module tblite_scf_mixer_diis
       integer :: memory
       integer :: mode
       integer :: iter
+      logical :: first_cycle = .false.
       real(wp) :: e_max
       real(wp), allocatable :: err_v(:)
       real(wp), allocatable :: F(:)
@@ -44,6 +48,7 @@ module tblite_scf_mixer_diis
    end type diis_mixer
 
    contains
+
 
    !> Initialize DIIS mixer
    subroutine new_diis(self, S, input)
@@ -123,7 +128,7 @@ module tblite_scf_mixer_diis
       select case(self%mode)
       case(1)
          call get_emax(self)
-         call diis(self%iter, self%F, self%e_max, self%err_v, self%memory, info)
+         call diis(self%iter, self%F, self%e_max, self%err_v, self%memory, self, info)
       case(2)
          call diis(self%iter, self%q, self%e_max, self%err_v, self%memory, info)
       end select
@@ -210,7 +215,7 @@ module tblite_scf_mixer_diis
       real(wp) :: F_2d(self%ndim, self%ndim), D_2d(self%ndim, self%ndim)
       real(wp) :: tmp(self%ndim,self%ndim), tmp1(self%ndim,self%ndim)
       real(wp) :: tmp2(self%ndim,self%ndim)
-      real(wp) :: tmp3(self%ndim,self%ndim), tmp4(self%ndim,self%ndim)
+      real(wp) :: tmp3(self%ndim,self%ndim)
       indx = 0
       do i=1,self%ndim
          do j=i,self%ndim
@@ -223,9 +228,9 @@ module tblite_scf_mixer_diis
       tmp = 0.0_wp
       call gemm(D_2d, F_2d, tmp1, beta=0.0_wp)
       call gemm(D_2d, self%S, tmp2, beta=0.0_wp)
-      call gemm(self%S, tmp1, tmp3, beta=0.0_wp)
-      call gemm(F_2d, tmp2, tmp4, beta=0.0_wp)
-      tmp = tmp3 - tmp4
+      call gemm(self%S, tmp1, D_2d, beta=0.0_wp)
+      call gemm(F_2d, tmp2, tmp1, beta=0.0_wp)
+      tmp = D_2d - tmp1
       self%e_max = abs(tmp(1,1))
       indx = 1
       do i=1,self%ndim
@@ -386,9 +391,6 @@ module tblite_scf_mixer_diis
    end subroutine call_lapack_gesv
 
    subroutine diis(it, mat, e_max, err_v, memory, info)
-      !parameters
-      integer :: max_k = 100000, min_dim = 5
-      real(wp) :: diis_thresh = 1.0_wp
       logical :: start_diis
 
       integer, intent(in) :: it, memory
@@ -396,16 +398,16 @@ module tblite_scf_mixer_diis
       real(wp), intent(inout) :: mat(:)
       real(wp), intent(in) :: err_v(:), e_max
       real(wp) :: k, e_3
-      real(wp), allocatable :: last_sv_err(:), last_sv_mat(:), B_scaled(:,:), old_B(:,:), sol(:,:)
+      real(wp), allocatable :: last_sv_err(:), last_sv_mat(:), B_scaled(:, :), old_B(:,:), sol(:,:)
       real(wp), allocatable, save :: B(:,:), saved_err(:), saved_mat(:)
       real(wp), save :: save_emax(3)
       integer, save :: mov, var, last_mov
       
       !Getting e_3 and checking if in range to start
       if (e_max<diis_thresh) then
-         start_diis = .TRUE.
+         start_diis = .true.
       else
-         start_diis = .FALSE.
+         start_diis = .false.
          info = 0
       end if
       if (it == 1) then
@@ -469,7 +471,7 @@ module tblite_scf_mixer_diis
             else
                if (size(B, 1) <= memory) exit
             end if
-            if (allocated(old_B) .eqv. .TRUE.) deallocate(old_B)
+            if (allocated(old_B) .eqv. .true.) deallocate(old_B)
             allocate(old_B(it-mov,it-mov))
             old_B = B(2:it+1-mov,2:it+1-mov)
             deallocate(B)
@@ -488,7 +490,7 @@ module tblite_scf_mixer_diis
       end if
       
       !Constructing mat if below threshold
-      if (start_diis .eqv. .TRUE.) call build_mat(B_scaled,it+1,mov,saved_mat,sol, mat, info)
+      if (start_diis .eqv. .true.) call build_mat(B_scaled,it+1,mov,saved_mat,sol, mat, info)
       deallocate(sol)
       deallocate(B_scaled)
 
