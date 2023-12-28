@@ -31,21 +31,21 @@ module tblite_scf_mixer
    implicit none
    private
 
-   public :: mixer_type, new_diis_mixer, new_broyden_mixer, mixer_alogorithm
+   public :: mixer_type, new_diis_mixer, new_broyden_mixer, mixer_algorithm
 
    !> Possible solvers provided by LAPACK
    type :: enum_mixer
       !> Broyden mixer
-      integer :: broyden = 1
+      integer :: broyden = 0
       !> DIIS F 
-      integer :: diis_f = 2
+      integer :: diis_f = 1
       !> DIIS D
-      integer :: diis_d = 3
+      integer :: diis_d = 2
 
    end type enum_mixer
 
    !> Actual enumerator of possible solvers
-   type(enum_mixer), parameter :: mixer_alogorithm = enum_mixer()
+   type(enum_mixer), parameter :: mixer_algorithm = enum_mixer()
 
    !> Input for selecting electronic mixer
    type, public :: mixer_input
@@ -63,12 +63,13 @@ subroutine new_mixer(self, calc, ints, ndim)
    type(integral_type) :: ints
    integer :: ndim
 
-   select case(calc%mixer_type)
-   case(mixer_alogorithm%broyden)
+   select case(calc%mixer_kind)
+   case(mixer_algorithm%broyden)
       call new_broyden_mixer(self, calc%max_iter, ndim, calc%mixer_damping)
-   case(mixer_alogorithm%diis_f)
-      call new_diis_mixer(self, ints%overlap, ndim, )
-
+   case(mixer_algorithm%diis_f, mixer_algorithm%diis_d)
+      call new_diis_mixer(self, ints%overlap, ndim, calc%mixer_kind)
+   end select
+end subroutine new_mixer
 
 subroutine new_diis_mixer(self, overlap_matrix, memory, mode)
    class(mixer_type), allocatable, intent(out) :: self

@@ -55,8 +55,7 @@ pure function max_info(lhs, rhs) result(new)
       dipole=max(lhs%dipole, rhs%dipole), &
       quadrupole=max(lhs%quadrupole, rhs%quadrupole), &
       fockian=max(lhs%fockian, rhs%fockian), &
-      density=max(lhs%density, rhs%density)
-      )
+      density=max(lhs%density, rhs%density))
 
 end function max_info
 

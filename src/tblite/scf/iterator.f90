@@ -88,9 +88,6 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
 
-   !if (iscf .eq. 0)
-   !new_mixer(mixer, calc)
-
    select case(mixer_kind)
    case(0)
       if (iscf > 0) then
@@ -224,7 +221,7 @@ end subroutine get_qat_from_qsh
 
 
 function get_mixer_dimension(mol, bas, info) result(ndim)
-   use tblite_scf_info, only : atom_resolved, shell_resolved
+   use tblite_scf_info, only : atom_resolved, shell_resolved, orbital_resolved
    type(structure_type), intent(in) :: mol
    type(basis_type), intent(in) :: bas
    type(scf_info), intent(in) :: info
@@ -262,7 +259,7 @@ function get_mixer_dimension(mol, bas, info) result(ndim)
 end function get_mixer_dimension
 
 subroutine set_mixer(mixer, wfn, info)
-   use tblite_scf_info, only : atom_resolved, shell_resolved
+   use tblite_scf_info, only : atom_resolved, shell_resolved, orbital_resolved
    class(mixer_type), intent(inout) :: mixer
    type(wavefunction_type), intent(in) :: wfn
    type(scf_info), intent(in) :: info
@@ -285,16 +282,19 @@ subroutine set_mixer(mixer, wfn, info)
    end select
 
    select case(info%density)
-   case 
+   case(orbital_resolved)
       call mixer%set(wfn%density)
    end select
 
-
+   select case(info%fockian)
+   case(orbital_resolved)
+      call mixer%set(wfn%coeff)
+   end select
 
 end subroutine set_mixer
 
 subroutine diff_mixer(mixer, wfn, info)
-   use tblite_scf_info, only : atom_resolved, shell_resolved
+   use tblite_scf_info, only : atom_resolved, shell_resolved, orbital_resolved
    class(mixer_type), intent(inout) :: mixer
    type(wavefunction_type), intent(in) :: wfn
    type(scf_info), intent(in) :: info
@@ -316,12 +316,20 @@ subroutine diff_mixer(mixer, wfn, info)
       call mixer%diff(wfn%qpat)
    end select
 
-   select case(info%)
+   select case(info%density)
+   case(orbital_resolved)
+      call mixer%diff(wfn%density)
+   end select
+
+   select case(info%fockian)
+   case(orbital_resolved)
+      call mixer%diff(wfn%coeff)
+   end select
 
 end subroutine diff_mixer
 
 subroutine get_mixer(mixer, bas, wfn, info, mixer_kind)
-   use tblite_scf_info, only : atom_resolved, shell_resolved
+   use tblite_scf_info, only : atom_resolved, shell_resolved, orbital_resolved
    class(mixer_type), intent(inout) :: mixer
    type(basis_type), intent(in) :: bas
    type(wavefunction_type), intent(inout) :: wfn
@@ -346,6 +354,16 @@ subroutine get_mixer(mixer, bas, wfn, info, mixer_kind)
       select case(info%quadrupole)
       case(atom_resolved)
          call mixer%get(wfn%qpat)
+      end select
+
+      select case(info%density)
+      case(orbital_resolved)
+         call mixer%get(wfn%density)
+      end select
+
+      select case(info%fockian)
+      case(orbital_resolved)
+         call mixer%get(wfn%coeff)
       end select
    case(1)
       call mixer%get_F(wfn%coeff)

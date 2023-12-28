@@ -42,7 +42,7 @@ module tblite_xtb_calculator
    use tblite_xtb_coulomb, only : tb_coulomb
    use tblite_xtb_h0, only : tb_hamiltonian, new_hamiltonian
    use tblite_xtb_spec, only : tb_h0spec
-   use tblite_scf_mixer, only : mixer_alogorithm
+   use tblite_scf_mixer, only : mixer_algorithm
    implicit none
    private
 
@@ -80,7 +80,7 @@ module tblite_xtb_calculator
       !> List of additional interaction containers
       type(container_list), allocatable :: interactions
       !> Mixer Type
-      integer :: mixer_type = mixer_alogorithm%broyden
+      integer :: mixer_kind = mixer_algorithm%broyden
    contains
       !> Get information about density dependent quantities used in the energy
       procedure :: variable_info
@@ -666,11 +666,11 @@ pure function variable_info(self) result(info)
       info = max(info, self%interactions%variable_info())
    end if
 
-   if (self%mixer_type .eq. mixer_alogorithm%diis_d) then
+   if (self%mixer_kind .eq. mixer_algorithm%diis_d) then
       info = scf_info(density=orbital_resolved)
    end if
    
-   if (self%mixer_type .eq. mixer_alogorithm%diis_f) then
+   if (self%mixer_kind .eq. mixer_algorithm%diis_f) then
       info = scf_info(fockian=orbital_resolved)
    end if
 

@@ -226,7 +226,7 @@ subroutine run_main(config, error)
    end if
 
    call xtb_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
-      & config%verbosity, results, config%scf_acc_type)
+      & config%verbosity, results)
    if (ctx%failed()) then
       call fatal(ctx, "Singlepoint calculation failed")
       do while(ctx%failed())
@@ -264,6 +264,15 @@ subroutine run_main(config, error)
          call info(ctx, "JSON dump of results written to '"//config%json_output//"'")
       end if
    end if
+
+   select case(config%scf_acc_type)
+   case(0)
+      calc%mixer_kind = 0
+   case(1)
+      calc%mixer_kind = 1
+   case(2)
+      cals%mixer_kind = 2
+   end select
 end subroutine run_main
 
 

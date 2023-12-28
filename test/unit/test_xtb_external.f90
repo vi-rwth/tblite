@@ -89,13 +89,13 @@ subroutine test_e_mb01(error)
    cont = electric_field([-2.0_wp, 0.0_wp, 0.0_wp]*vatoau)
    call calc%push_back(cont)
 
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, mixer_kind=0)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0)
 
    call check(error, energy, ref1, thr=thr)
    if (allocated(error)) return
 
    call calc%pop(cont)
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, mixer_kind=0)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0)
 
    call check(error, energy, ref0, thr=thr)
 
@@ -126,13 +126,13 @@ subroutine test_e_mb02(error)
    cont = electric_field([0.0_wp, sqrt(2.0_wp), -sqrt(2.0_wp)]*vatoau)
    call calc%push_back(cont)
 
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, verbosity=0, mixer_kind=0)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, verbosity=0)
 
    call check(error, energy, ref1, thr=thr)
    if (allocated(error)) return
 
    call calc%pop(cont)
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, verbosity=0, mixer_kind=0)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, verbosity=0)
 
    call check(error, energy, ref0, thr=thr)
 
@@ -163,7 +163,7 @@ subroutine test_d_mb03(error)
    cont = electric_field(efield)
    call calc%push_back(cont)
 
-   call xtb_singlepoint(ctx, mol, calc, wfn0, acc, energy, verbosity=0, mixer_kind=0)
+   call xtb_singlepoint(ctx, mol, calc, wfn0, acc, energy, verbosity=0)
    dipole(:) = matmul(mol%xyz, wfn0%qat(:, 1)) + sum(wfn0%dpat(:, :, 1), 2)
 
    do i = 1, 3
@@ -172,14 +172,14 @@ subroutine test_d_mb03(error)
       call calc%pop(cont)
       cont = electric_field(efield)
       call calc%push_back(cont)
-      call xtb_singlepoint(ctx, mol, calc, wfn, acc, er, verbosity=0, mixer_kind=0)
+      call xtb_singlepoint(ctx, mol, calc, wfn, acc, er, verbosity=0)
 
       wfn = wfn0
       efield(i) = efield(i) - 2*step
       call calc%pop(cont)
       cont = electric_field(efield)
       call calc%push_back(cont)
-      call xtb_singlepoint(ctx, mol, calc, wfn, acc, el, verbosity=0, mixer_kind=0)
+      call xtb_singlepoint(ctx, mol, calc, wfn, acc, el, verbosity=0)
 
       efield(i) = efield(i) + step
       numdip(i) = -0.5_wp * (er - el) / step
@@ -221,7 +221,7 @@ subroutine test_d_mb04(error)
    cont = electric_field(efield)
    call calc%push_back(cont)
 
-   call xtb_singlepoint(ctx, mol, calc, wfn0, acc, energy, verbosity=0, mixer_kind=0)
+   call xtb_singlepoint(ctx, mol, calc, wfn0, acc, energy, verbosity=0)
    dipole(:) = matmul(mol%xyz, wfn0%qat(:, 1)) + sum(wfn0%dpat(:, :, 1), 2)
 
    do i = 1, 3
@@ -230,14 +230,14 @@ subroutine test_d_mb04(error)
       call calc%pop(cont)
       cont = electric_field(efield)
       call calc%push_back(cont)
-      call xtb_singlepoint(ctx, mol, calc, wfn, acc, er, verbosity=0, mixer_kind=0)
+      call xtb_singlepoint(ctx, mol, calc, wfn, acc, er, verbosity=0)
 
       wfn = wfn0
       efield(i) = efield(i) - 2*step
       call calc%pop(cont)
       cont = electric_field(efield)
       call calc%push_back(cont)
-      call xtb_singlepoint(ctx, mol, calc, wfn, acc, el, verbosity=0, mixer_kind=0)
+      call xtb_singlepoint(ctx, mol, calc, wfn, acc, el, verbosity=0)
 
       efield(i) = efield(i) + step
       numdip(i) = -0.5_wp * (er - el) / step
@@ -298,7 +298,7 @@ subroutine test_g_mb05(error)
    cont = empty_interaction()
    call calc%push_back(cont)
 
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, verbosity=0, mixer_kind=0)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, verbosity=0)
 
    call check(error, energy, eref, thr=thr)
    if (allocated(error)) return
@@ -350,7 +350,7 @@ subroutine test_g_mb06(error)
    cont = empty_interaction()
    call calc%push_back(cont)
 
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, verbosity=0, mixer_kind=0)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, gradient, sigma, verbosity=0)
 
    call check(error, energy, eref, thr=thr)
    if (allocated(error)) return
