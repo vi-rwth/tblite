@@ -271,7 +271,7 @@ subroutine run_main(config, error)
    case(1)
       calc%mixer_kind = 1
    case(2)
-      cals%mixer_kind = 2
+      calc%mixer_kind = 2
    end select
 end subroutine run_main
 

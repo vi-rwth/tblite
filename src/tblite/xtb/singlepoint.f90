@@ -33,8 +33,8 @@ module tblite_xtb_singlepoint
    use tblite_lapack_sygvr, only : sygvr_solver
    use tblite_output_format, only : format_string
    use tblite_results, only : results_type
-   use tblite_scf, only : mixer_type, new_diis_mixer, new_broyden_mixer, &
-      & scf_info, next_scf, get_mixer_dimension, potential_type, new_potential
+   use tblite_scf, only : mixer_type, new_mixer, scf_info, next_scf, &
+      & get_mixer_dimension, potential_type, new_potential
    use tblite_scf_solver, only : solver_type
    use tblite_timer, only : timer_type, format_time
    use tblite_wavefunction, only : wavefunction_type, get_density_matrix, &

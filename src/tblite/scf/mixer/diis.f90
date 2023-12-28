@@ -128,7 +128,7 @@ module tblite_scf_mixer_diis
       select case(self%mode)
       case(1)
          call get_emax(self)
-         call diis(self%iter, self%F, self%e_max, self%err_v, self%memory, self, info)
+         call diis(self%iter, self%F, self%e_max, self%err_v, self%memory, info)
       case(2)
          call diis(self%iter, self%q, self%e_max, self%err_v, self%memory, info)
       end select

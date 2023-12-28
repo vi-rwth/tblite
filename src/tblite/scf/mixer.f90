@@ -31,7 +31,7 @@ module tblite_scf_mixer
    implicit none
    private
 
-   public :: mixer_type, new_diis_mixer, new_broyden_mixer, mixer_algorithm
+   public :: mixer_type, new_mixer, mixer_algorithm
 
    !> Possible solvers provided by LAPACK
    type :: enum_mixer

@@ -74,12 +74,12 @@ subroutine numdiff_grad(ctx, mol, calc, wfn, numgrad)
          moli = mol
          wfni = wfn
          moli%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         call xtb_singlepoint(ctx, moli, calc, wfni, acc, er)
+         call xtb_singlepoint(ctx, moli, calc, wfni, acc, er, verbosity=0)
 
          moli = mol
          wfni = wfn
          moli%xyz(ic, iat) = mol%xyz(ic, iat) - step
-         call xtb_singlepoint(ctx, moli, calc, wfni, acc, el)
+         call xtb_singlepoint(ctx, moli, calc, wfni, acc, el, verbosity=0)
 
          numgrad(ic, iat) = 0.5_wp*(er - el)/step
       end do
