@@ -117,25 +117,13 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    end if
    call add_pot_to_h1(bas, ints, pot, wfn%coeff)
 
+   call set_mixer(mixer, wfn, info)
    select case(mixer_kind)
-   case(0)
-      call set_mixer(mixer, wfn, info)
    case(1)
       if (iscf > 1) then
-         call mixer%set_D(wfn%density)
-         call mixer%set_F(wfn%coeff)
          call mixer%next(error)
          if (allocated(error)) return
          call get_mixer(mixer, bas, wfn, info, mixer_kind)
-      else
-         call set_mixer(mixer, wfn, info)
-      end if
-   case(2)
-      if (iscf > 1) then
-         call mixer%set_D(wfn%density)
-         call mixer%set_F(wfn%coeff)
-      else
-         call set_mixer(mixer, wfn, info)
       end if
    end select
 
@@ -246,15 +234,15 @@ function get_mixer_dimension(mol, bas, info) result(ndim)
       ndim = ndim + 6*mol%nat
    end select
 
-   select case(info%density)
-   case(orbital_resolved)
-      ndim = bas%nao * bas%nao
-   end select
+   !select case(info%density)
+   !case(orbital_resolved)
+   !   ndim = bas%nao * bas%nao
+   !end select
 
-   select case(info%fockian)
-   case(orbital_resolved)
-      ndim = bas%nao * bas%nao
-   end select
+   !select case(info%fockian)
+   !case(orbital_resolved)
+   !   ndim = bas%nao * bas%nao
+   !end select
 
 end function get_mixer_dimension
 
@@ -281,16 +269,18 @@ subroutine set_mixer(mixer, wfn, info)
       call mixer%set(wfn%qpat)
    end select
 
-   select case(info%density)
-   case(orbital_resolved)
-      call mixer%set(wfn%density)
-   end select
+   !select case(info%density)
+   !case(orbital_resolved)
+   !   call mixer%set(wfn%density)
+   !end select
 
-   select case(info%fockian)
-   case(orbital_resolved)
-      call mixer%set(wfn%coeff)
-   end select
+   !select case(info%fockian)
+   !case(orbital_resolved)
+   !   call mixer%set(wfn%coeff)
+   !end select
 
+   call mixer%set_D(wfn%density)
+   call mixer%set_F(wfn%coeff)
 end subroutine set_mixer
 
 subroutine diff_mixer(mixer, wfn, info)
@@ -316,15 +306,15 @@ subroutine diff_mixer(mixer, wfn, info)
       call mixer%diff(wfn%qpat)
    end select
 
-   select case(info%density)
-   case(orbital_resolved)
-      call mixer%diff(wfn%density)
-   end select
+   !select case(info%density)
+   !case(orbital_resolved)
+   !   call mixer%diff(wfn%density)
+   !end select
 
-   select case(info%fockian)
-   case(orbital_resolved)
-      call mixer%diff(wfn%coeff)
-   end select
+   !select case(info%fockian)
+   !case(orbital_resolved)
+   !   call mixer%diff(wfn%coeff)
+   !end select
 
 end subroutine diff_mixer
 
@@ -356,15 +346,15 @@ subroutine get_mixer(mixer, bas, wfn, info, mixer_kind)
          call mixer%get(wfn%qpat)
       end select
 
-      select case(info%density)
-      case(orbital_resolved)
-         call mixer%get(wfn%density)
-      end select
+      !select case(info%density)
+      !case(orbital_resolved)
+      !   call mixer%get(wfn%density)
+      !end select
 
-      select case(info%fockian)
-      case(orbital_resolved)
-         call mixer%get(wfn%coeff)
-      end select
+      !select case(info%fockian)
+      !case(orbital_resolved)
+      !   call mixer%get(wfn%coeff)
+      !end select
    case(1)
       call mixer%get_F(wfn%coeff)
    end select

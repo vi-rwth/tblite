@@ -8,7 +8,7 @@ module tblite_scf_mixer_diis
    public :: new_diis
 
    integer, parameter :: max_k = 100000, min_dim = 5
-   real(wp), parameter :: diis_thresh = 1.0_wp
+   real(wp), parameter :: diis_thresh = 0.5_wp
 
    type, public :: diis_input
       !> Number of steps to keep in memory
@@ -21,13 +21,23 @@ module tblite_scf_mixer_diis
       integer :: memory
       integer :: mode
       integer :: iter
-      logical :: first_cycle = .false.
+      logical :: first_cycle
+      logical :: first_occurrence
+      logical :: start_diis
       real(wp) :: e_max
       real(wp), allocatable :: err_v(:)
       real(wp), allocatable :: F(:)
       real(wp), allocatable :: D(:)
       real(wp), allocatable :: q(:)
       real(wp), allocatable :: S(:,:)
+      !> For main DIIS routine
+      integer :: mov
+      integer :: last_mov
+      integer :: var
+      real(wp) :: save_emax(3)
+      real(wp), allocatable :: saved_err(:)
+      real(wp), allocatable :: saved_mat(:)
+      real(wp), allocatable :: B(:,:)
    contains
       !> Apply mixing
       procedure :: next
@@ -49,7 +59,6 @@ module tblite_scf_mixer_diis
 
    contains
 
-
    !> Initialize DIIS mixer
    subroutine new_diis(self, S, input)
       class(diis_mixer), intent(out) :: self
@@ -60,6 +69,9 @@ module tblite_scf_mixer_diis
       self%ndim = ndim
       self%iter = 0
       self%e_max = 0
+      self%first_cycle = .true.
+      self%first_occurrence = .false.
+      self%start_diis = .false.
       self%memory = input%memory
       self%mode = input%mode
       allocate(self%S(ndim,ndim))
@@ -67,6 +79,10 @@ module tblite_scf_mixer_diis
       allocate(self%err_v(ndim*(ndim+1)/2))
       allocate(self%D(ndim*ndim))
       allocate(self%F(ndim*(ndim+1)/2))
+      !> For main DIIS routine
+      self%mov = 0
+      self%last_mov = 0
+      self%var = 1
    end subroutine new_diis
 
    !> Routines for accessing D and F
@@ -77,7 +93,8 @@ module tblite_scf_mixer_diis
       class(diis_mixer), intent(inout) :: self
       !> Density vector
       real(wp), intent(in) :: d_1d(:)
-      self%D = d_1d
+      if ((self%first_cycle .eqv. .false.) &
+         & .and. (self%first_occurrence .eqv. .false.)) self%D = d_1d
    end subroutine set_1d_D
 
    !> Set new Fock-matrix from 1D array
@@ -88,13 +105,16 @@ module tblite_scf_mixer_diis
       real(wp), intent(in) :: f_1d(:)
       integer :: indx
       indx = 0
-      do i=1,self%ndim
-         do j=i,self%ndim
-            indx = indx + 1
-            self%F(indx) = f_1d(j+self%ndim*(i-1))
+      if ((self%first_cycle .eqv. .false.) &
+         & .and. (self%first_occurrence .eqv. .false.)) then
+         do i=1,self%ndim
+            do j=i,self%ndim
+               indx = indx + 1
+               self%F(indx) = f_1d(j+self%ndim*(i-1))
+            end do
          end do
-      end do
-      if (self%mode == 2) call get_emax(self)
+         call get_emax(self)
+      end if
    end subroutine set_1d_F
 
    !> Set new density from 1D array (only for diis_d)
@@ -104,17 +124,20 @@ module tblite_scf_mixer_diis
       real(wp), allocatable :: lastq(:)
       !> Density vector
       real(wp), intent(in) :: qvec(:)
-      if (.not. allocated(self%q)) then
-         allocate(self%q(size(qvec)))
-         self%q = qvec
-      else
-         allocate(lastq(size(self%q)))
-         lastq = self%q
-         deallocate(self%q)
-         allocate(self%q(size(lastq)+size(qvec)))
-         self%q(1:size(lastq)) = lastq
-         deallocate(lastq)
-         self%q(size(lastq)+1:size(lastq)+size(qvec)) = qvec
+      if ((self%first_cycle .eqv. .true.) &
+         & .or. (self%first_occurrence .eqv. .true.)) then
+         if (.not. allocated(self%q)) then
+            allocate(self%q(size(qvec)))
+            self%q = qvec
+         else
+            allocate(lastq(size(self%q)))
+            lastq = self%q
+            deallocate(self%q)
+            allocate(self%q(size(lastq)+size(qvec)))
+            self%q(1:size(lastq)) = lastq
+            deallocate(lastq)
+            self%q(size(lastq)+1:size(lastq)+size(qvec)) = qvec
+         end if
       end if
    end subroutine set_1d
 
@@ -123,16 +146,17 @@ module tblite_scf_mixer_diis
       class(diis_mixer), intent(inout) :: self
       type(error_type), allocatable, intent(out) :: error
       integer :: info
-
-      self%iter = self%iter + 1
-      select case(self%mode)
-      case(1)
-         call get_emax(self)
-         call diis(self%iter, self%F, self%e_max, self%err_v, self%memory, info)
-      case(2)
-         call diis(self%iter, self%q, self%e_max, self%err_v, self%memory, info)
-      end select
-      if (info /= 0) call fatal_error(error, "DIIS failed to obtain next iteration")
+      if (self%start_diis .eqv. .true.) then
+         self%iter = self%iter + 1
+         select case(self%mode)
+         case(1)
+            call diis(self, self%F, info)
+         case(2)
+            call diis(self, self%q, info)
+            self%first_occurrence = .false.
+         end select
+         if (info /= 0) call fatal_error(error, "DIIS failed to obtain next iteration")
+      end if
    end subroutine next
 
    !> Get Fock-matrix as 1D array (for diis_f)
@@ -175,29 +199,34 @@ module tblite_scf_mixer_diis
       real(wp), intent(in) :: qvec(:)
       real(wp), allocatable :: lastq(:)
       real(wp), allocatable, save :: old_q(:)
-      if (.not. allocated(old_q)) then
-         allocate(old_q(size(self%q)))
-         old_q = self%q
-         deallocate(self%q)
-         allocate(self%q(size(qvec)))
-         self%q = qvec
-      else 
-         allocate(lastq(size(self%q)))
-         lastq = self%q
-         deallocate(self%q)
-         allocate(self%q(size(lastq)+size(qvec)))
-         self%q(1:size(lastq)) = lastq
-         deallocate(lastq)
-         self%q(size(lastq)+1:size(lastq)+size(qvec)) = qvec
-         if (size(self%q) == size(old_q)) then
-            self%e_max = 0.0_wp
-            do i = 1, size(self%q)
-               self%e_max = self%e_max + (self%q(i) - old_q(i))**2 / size(self%q)
-            end do
-            self%e_max = sqrt(self%e_max)
+      if (self%first_cycle .eqv. .true.) then
+         if (.not. allocated(old_q)) then
+            allocate(old_q(size(self%q)))
+            old_q = self%q
             deallocate(self%q)
-            deallocate(old_q)
-         end if   
+            allocate(self%q(size(qvec)))
+            self%q = qvec
+         else
+            allocate(lastq(size(self%q)))
+            lastq = self%q
+            deallocate(self%q)
+            allocate(self%q(size(lastq)+size(qvec)))
+            self%q(1:size(lastq)) = lastq
+            deallocate(lastq)
+            self%q(size(lastq)+1:size(lastq)+size(qvec)) = qvec
+            if (size(self%q) == size(old_q)) then
+               self%e_max = 0.0_wp
+               do i = 1, size(self%q)
+                  self%e_max = self%e_max + (self%q(i) - old_q(i))**2 / size(self%q)
+               end do
+               self%e_max = sqrt(self%e_max)
+               deallocate(self%q)
+               deallocate(old_q)
+               self%first_cycle = .false.
+            end if   
+         end if
+      else if (self%mode == 2) then
+         self%first_occurrence = .true.
       end if
    end subroutine diff_1d
 
@@ -240,6 +269,7 @@ module tblite_scf_mixer_diis
             indx=indx+1
          end do
       end do
+      if (self%e_max < diis_thresh) self%start_diis = .true.
    end subroutine get_emax
 
    !> General linear algebra
@@ -390,110 +420,95 @@ module tblite_scf_mixer_diis
       call gesv(a, b, info, ipiv)
    end subroutine call_lapack_gesv
 
-   subroutine diis(it, mat, e_max, err_v, memory, info)
-      logical :: start_diis
-
-      integer, intent(in) :: it, memory
+   subroutine diis(self, mat, info)
+      class(diis_mixer), intent(inout) :: self
       integer, intent(out) :: info
       real(wp), intent(inout) :: mat(:)
-      real(wp), intent(in) :: err_v(:), e_max
       real(wp) :: k, e_3
       real(wp), allocatable :: last_sv_err(:), last_sv_mat(:), B_scaled(:, :), old_B(:,:), sol(:,:)
-      real(wp), allocatable, save :: B(:,:), saved_err(:), saved_mat(:)
-      real(wp), save :: save_emax(3)
-      integer, save :: mov, var, last_mov
       
-      !Getting e_3 and checking if in range to start
-      if (e_max<diis_thresh) then
-         start_diis = .true.
-      else
-         start_diis = .false.
-         info = 0
-      end if
-      if (it == 1) then
-         mov = 0
-         last_mov = 0
-         var = 1
-      end if
-
-      select case(var)
+      info = 0
+      !> Calculating e3
+      select case(self%var)
       case(1)
-         save_emax(1) = e_max
-         var = 2
-         if (it>2) then
-            e_3 = (save_emax(2)-save_emax(3))+(save_emax(3)-save_emax(1))
+         self%save_emax(1) = self%e_max
+         self%var = 2
+         if (self%iter>2) then
+            e_3 = self%save_emax(2)-self%save_emax(1)
          else
             e_3 = 1
          end if
       case(2)
-         save_emax(2) = e_max
-         var = 3
-         if (it>2) then
-            e_3 = (save_emax(3)-save_emax(1))+(save_emax(1)-save_emax(2))
+         self%save_emax(2) = self%e_max
+         self%var = 3
+         if (self%iter>2) then
+            e_3 = self%save_emax(3)-self%save_emax(2)
          else
             e_3 = 1
          end if
       case(3)
-         save_emax(3) = e_max
-         var = 1
-         e_3 = (save_emax(1)-save_emax(2))+(save_emax(2)-save_emax(3))
+         self%save_emax(3) = self%e_max
+         self%var = 1
+         e_3 = self%save_emax(1)-self%save_emax(3)
       end select
 
       !Preparing for B construction
-      allocate(last_sv_mat((it-1-mov)*size(mat)))
-      allocate(last_sv_err((it-1-mov)*size(err_v)))
-      allocate(old_B(it-1-mov,it-1-mov))
-      if (it/=1) then
-         last_sv_err = saved_err(1+(mov-last_mov)*size(err_v):(it-1-last_mov)*size(err_v))
-         last_sv_mat = saved_mat(1+(mov-last_mov)*size(mat):(it-1-last_mov)*size(mat))
-         old_B = B(1:it-mov-1,1:it-mov-1)
-         deallocate(saved_err)
-         deallocate(saved_mat)
-         deallocate(B)
+      allocate(last_sv_mat((self%iter-1-self%mov)*size(mat)))
+      allocate(last_sv_err((self%iter-1-self%mov)*size(self%err_v)))
+      allocate(old_B(self%iter-1-self%mov,self%iter-1-self%mov))
+      if (self%iter/=1) then
+         last_sv_err = self%saved_err(1+(self%mov-self%last_mov)*size(self%err_v) &
+            & :(self%iter-1-self%last_mov)*size(self%err_v))
+         last_sv_mat = self%saved_mat(1+(self%mov-self%last_mov)*size(mat) &
+            & :(self%iter-1-self%last_mov)*size(mat))
+         old_B = self%B(1:self%iter-self%mov-1,1:self%iter-self%mov-1)
+         deallocate(self%saved_err)
+         deallocate(self%saved_mat)
+         deallocate(self%B)
       end if
-      allocate(B(it-mov+1, it-mov+1))
-      allocate(saved_err((it-mov)*size(err_v)))
-      allocate(saved_mat((it-mov)*size(mat)))
-      allocate(sol(it-mov+1,1))
-      allocate(B_scaled(it-mov+1, it-mov+1))
-      call save_vectors(mat, err_v, it, last_sv_mat, last_sv_err, saved_mat, saved_err, mov)
+      allocate(self%B(self%iter-self%mov+1, self%iter-self%mov+1))
+      allocate(self%saved_err((self%iter-self%mov)*size(self%err_v)))
+      allocate(self%saved_mat((self%iter-self%mov)*size(mat)))
+      allocate(sol(self%iter-self%mov+1,1))
+      allocate(B_scaled(self%iter-self%mov+1, self%iter-self%mov+1))
+      call save_vectors(mat, self%err_v, self%iter, last_sv_mat, last_sv_err, &
+         & self%saved_mat, self%saved_err, self%mov)
       deallocate(last_sv_err)
       deallocate(last_sv_mat)
 
       !Constructing B (and reducing k via rescaling + omitting older itations)
-      call build_B(err_v, saved_err, it, mov, old_B, B)
-      call rescale_B(k,it+1,mov, B, B_scaled, sol)
-      last_mov = mov
-      if (e_3 <= 0 .or. size(B, 1) >= memory) then
+      call build_B(self%err_v, self%saved_err, self%iter, self%mov, old_B, self%B)
+      call rescale_B(k,self%iter+1,self%mov, self%B, B_scaled, sol)
+      self%last_mov = self%mov
+      if (e_3 <= 0 .or. size(self%B, 1) >= self%memory) then
          do
             if (e_3 <= 0) then
-               if (it-mov <=min_dim .or. k < max_k) exit
+               if (self%iter-self%mov <= min_dim .or. k < max_k) exit
             else
-               if (size(B, 1) <= memory) exit
+               if (size(self%B, 1) <= self%memory) exit
             end if
             if (allocated(old_B) .eqv. .true.) deallocate(old_B)
-            allocate(old_B(it-mov,it-mov))
-            old_B = B(2:it+1-mov,2:it+1-mov)
-            deallocate(B)
+            allocate(old_B(self%iter-self%mov,self%iter-self%mov))
+            old_B = self%B(2:self%iter+1-self%mov,2:self%iter+1-self%mov)
+            deallocate(self%B)
             deallocate(B_scaled)
             deallocate(sol)
-            allocate(B(it-mov,it-mov))
-            allocate(B_scaled(it-mov,it-mov))
-            allocate(sol(it-mov,1))
-            B = old_B
+            allocate(self%B(self%iter-self%mov,self%iter-self%mov))
+            allocate(B_scaled(self%iter-self%mov,self%iter-self%mov))
+            allocate(sol(self%iter-self%mov,1))
+            self%B = old_B
             deallocate(old_B)
-            call rescale_B(k,it,mov, B,B_scaled, sol)
-            mov = mov+1
+            call rescale_B(k,self%iter,self%mov, self%B,B_scaled, sol)
+            self%mov = self%mov+1
          end do
       else
          deallocate(old_B)
       end if
       
-      !Constructing mat if below threshold
-      if (start_diis .eqv. .true.) call build_mat(B_scaled,it+1,mov,saved_mat,sol, mat, info)
+      !Mixing mat
+      call build_mat(B_scaled,self%iter+1,self%mov,self%saved_mat,sol, mat, info)
       deallocate(sol)
       deallocate(B_scaled)
 
-      !Use for next round: saved_mat, saved_err, B, mov, var, save_emax
    end subroutine diis
 end module tblite_scf_mixer_diis

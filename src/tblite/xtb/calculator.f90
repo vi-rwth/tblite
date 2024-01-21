@@ -79,7 +79,7 @@ module tblite_xtb_calculator
       !> List of additional interaction containers
       type(container_list), allocatable :: interactions
       !> Mixer Type
-      integer :: mixer_kind = 0
+      integer :: mixer_kind
    contains
       !> Get information about density dependent quantities used in the energy
       procedure :: variable_info
@@ -665,13 +665,13 @@ pure function variable_info(self) result(info)
       info = max(info, self%interactions%variable_info())
    end if
 
-   if (self%mixer_kind == 0) then
-      info = scf_info(density=orbital_resolved)
-   end if
+   !if (self%mixer_kind == 0) then
+   !   info = scf_info(density=orbital_resolved)
+   !end if
    
-   if (self%mixer_kind == 1) then
-      info = scf_info(fockian=orbital_resolved)
-   end if
+   !if (self%mixer_kind == 1) then
+   !   info = scf_info(fockian=orbital_resolved)
+   !end if
 
 end function variable_info
 

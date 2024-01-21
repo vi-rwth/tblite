@@ -79,6 +79,15 @@ subroutine run_main(config, error)
    ctx%terminal = context_terminal(config%color)
    ctx%solver = lapack_solver(config%solver)
 
+   select case(config%scf_acc_type)
+   case(0)
+      calc%mixer_kind = 0
+   case(1)
+      calc%mixer_kind = 1
+   case(2)
+      calc%mixer_kind = 2
+   end select
+   
    if (config%input == "-") then
       if (allocated(config%input_format)) then
          call read_structure(mol, input_unit, config%input_format, error)
@@ -265,14 +274,6 @@ subroutine run_main(config, error)
       end if
    end if
 
-   select case(config%scf_acc_type)
-   case(0)
-      calc%mixer_kind = 0
-   case(1)
-      calc%mixer_kind = 1
-   case(2)
-      calc%mixer_kind = 2
-   end select
 end subroutine run_main
 
 
